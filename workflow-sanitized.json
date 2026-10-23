@@ -1,0 +1,392 @@
+[
+  {
+    "updatedAt": "2026-10-23T21:08:09.641Z",
+    "createdAt": "2026-10-22T20:57:49.039Z",
+    "id": "qGruJiZ9J2DndX5h",
+    "name": "AI Opportunity & Learning Radar",
+    "description": null,
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -336,
+          -160
+        ],
+        "id": "f67a1ac5-0c9f-491a-a2b0-7e53f89d9238",
+        "name": "When clicking ‘Execute workflow’"
+      },
+      {
+        "parameters": {
+          "url": "https://api.github.com/search/issues",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "\"💎 Bounty\" is:issue is:open"
+              },
+              {
+                "name": "sort",
+                "value": "updated"
+              },
+              {
+                "name": "order",
+                "value": "desc"
+              },
+              {
+                "name": "per_page",
+                "value": "15"
+              }
+            ]
+          },
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Accept",
+                "value": "application/vnd.github+json"
+              },
+              {
+                "name": "User-Agent",
+                "value": "opportunity-radar-n8n"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          -16,
+          -272
+        ],
+        "id": "963a6185-08ef-4c2b-be4f-e6e76f4af374",
+        "name": "Fetch GitHub Bounties",
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "url": "https://remoteok.com/api",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          0,
+          -64
+        ],
+        "id": "05322340-c200-46a5-a6dd-2bedeeb8de07",
+        "name": "Fetch RemoteOK Jobs",
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "url": "https://hn.algolia.com/api/v1/search_by_date",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "query",
+                "value": "n8n"
+              },
+              {
+                "name": "tags",
+                "value": "story"
+              },
+              {
+                "name": "restrictSearchableAttributes",
+                "value": "title,url"
+              },
+              {
+                "name": "typoTolerance",
+                "value": "false"
+              },
+              {
+                "name": "hitsPerPage",
+                "value": "10"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          0,
+          128
+        ],
+        "id": "e975b6ff-a0ff-4279-972a-beb79779d8e1",
+        "name": "Fetch HN AI & Automation",
+        "retryOnFail": true,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "numberInputs": 3
+        },
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          272,
+          -48
+        ],
+        "id": "9318bc4b-1059-4a91-8779-8deb988fefb6",
+        "name": "Merge"
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst rawInputs = $input.all();\nconst unifiedItems = [];\nconst nowIso = new Date().toISOString();\n\nconst myCoreSkills = [\n  \"python\", \"fastapi\", \"next.js\", \"nextjs\", \"react\", \"typescript\",\n  \"javascript\", \"supabase\", \"postgres\", \"postgresql\", \"sql\",\n  \"docker\", \"n8n\", \"automation\", \"webhook\", \"api\", \"rest\",\n  \"backend\", \"full stack\", \"fullstack\", \"linux\",\n  \"artificial intelligence\", \"machine learning\", \"llm\", \"agent\", \"agents\"\n];\n\nfunction findMatchedSkills(text) {\n  const normalized = String(text || \"\").toLowerCase();\n\n  return myCoreSkills.filter(skill => {\n    if (skill.includes(\" \")) return normalized.includes(skill);\n\n    const escaped = skill.replace(/[.*+?^${}()|[\\]\\\\]/g, \"\\\\$&\");\n    return new RegExp(\n      `(^|[^a-z0-9+#.])${escaped}($|[^a-z0-9+#.])`,\n      \"i\"\n    ).test(normalized);\n  });\n}\n\nfunction clampScore(score) {\n  return Math.max(0, Math.min(100, Math.round(score)));\n}\n\nfunction safeDate(value) {\n  if (!value) return null;\n  const parsed = new Date(value);\n  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();\n}\n\nfunction makeItem(fields) {\n  return {\n    json: {\n      ...fields,\n      collected_at: nowIso\n    }\n  };\n}\n\n// =====================================================\n// CASE 1: GitHub Search Issues API response\n// =====================================================\nfor (const item of rawInputs) {\n  const data = item.json || {};\n\n  if (\n    Array.isArray(data.items) &&\n    typeof data.total_count === \"number\"\n  ) {\n    for (const issue of data.items) {\n      if (\n        !issue ||\n        issue.pull_request ||\n        issue.state === \"closed\" ||\n        !issue.html_url\n      ) continue;\n\n      const title = issue.title || \"Untitled GitHub issue\";\n\n      const repo = issue.repository_url\n        ? issue.repository_url.replace(\n            \"https://api.github.com/repos/\", \"\"\n          )\n        : \"Unknown repository\";\n\n      const labels = Array.isArray(issue.labels)\n        ? issue.labels.map(label =>\n            typeof label === \"string\" ? label : label?.name\n          ).filter(Boolean)\n        : [];\n\n      const searchBlob =\n        `${title} ${repo} ${labels.join(\" \")} ${issue.body || \"\"}`;\n\n      const matchedSkills = findMatchedSkills(searchBlob);\n\n      // A dollar amount is not proof of a cash bounty.\n      const bountyEvidence =\n        labels.some(label =>\n          /bounty|algora|polar|funded|cash reward/i.test(label)\n        ) ||\n        /algora|polar\\.sh|bounty/i.test(searchBlob);\n\n      const dollarMatch = searchBlob.match(\n        /(?:US\\$|\\$)\\s?\\d+(?:,\\d{3})*(?:\\.\\d{1,2})?/\n      );\n\n      let score = 25;\n\n      if (bountyEvidence) score += 25;\n      if (bountyEvidence && dollarMatch) score += 15;\n\n      score += Math.min(25, matchedSkills.length * 5);\n\n      if ((issue.comments ?? 0) <= 3) score += 5;\n\n      const verificationStatus = bountyEvidence\n        ? \"Potential bounty — verify original terms and active status\"\n        : dollarMatch\n          ? \"Unverified monetary mention — bounty not confirmed\"\n          : \"Open issue — bounty not established\";\n\n      const compensation =\n        bountyEvidence && dollarMatch\n          ? `${dollarMatch[0]} mentioned; amount and active status unverified`\n          : \"Not verified\";\n\n      unifiedItems.push(makeItem({\n        uid: `gh_${issue.id ?? issue.node_id ?? issue.html_url}`,\n        module: \"EARNING_OPPORTUNITY\",\n        source_type: \"GitHub Issue Candidate\",\n        title,\n        organization: repo,\n        url: issue.html_url,\n\n        // Creation date and update date are separate.\n        published_at: safeDate(issue.created_at),\n        updated_at: safeDate(issue.updated_at),\n\n        india_eligibility:\n          \"Unknown — verify reward terms, platform eligibility and payment rules\",\n\n        compensation,\n        verification_status: verificationStatus,\n        matched_skills: matchedSkills,\n\n        relevance_score: clampScore(score),\n\n        score_explanation:\n          `Base 25; bounty indicators ${bountyEvidence ? \"+25\" : \"+0\"}; ` +\n          `amount with bounty indicators ${bountyEvidence && dollarMatch ? \"+15\" : \"+0\"}; ` +\n          `skill overlap +${Math.min(25, matchedSkills.length * 5)}; ` +\n          `low comment count ${(issue.comments ?? 0) <= 3 ? \"+5\" : \"+0\"}. ` +\n          \"Triage score, not probability of payment.\",\n\n        where_to_go: issue.html_url,\n\n        how_to_capture:\n          \"Open the original issue. Verify the active reward, its terms, \" +\n          \"contribution instructions and eligibility before investing time.\"\n      }));\n    }\n\n    continue;\n  }\n\n  // =====================================================\n  // CASE 2: RemoteOK individual job object\n  // =====================================================\n  if (data.slug || data.position || data.legal) {\n    // Skip legal/notice records and incomplete jobs.\n    if (!data.id || !data.position) continue;\n\n    const title = String(data.position);\n    const company = data.company || \"Company not specified\";\n\n    const url =\n      data.apply_url ||\n      data.url ||\n      (data.slug\n        ? `https://remoteok.com/remote-jobs/${data.slug}`\n        : null);\n\n    if (!url) continue;\n\n    const tags = Array.isArray(data.tags)\n      ? data.tags.join(\" \")\n      : \"\";\n\n    const location = String(data.location || \"Not specified\");\n\n    const searchBlob =\n      `${title} ${company} ${tags} ${data.description || \"\"}`;\n\n    const matchedSkills = findMatchedSkills(searchBlob);\n\n    // Only keep roles with a matching skill.\n    if (matchedSkills.length === 0) continue;\n\n    // Exclude clearly stated restrictions; do not assume\n    // all other jobs accept applicants from India.\n    const explicitlyRestricted =\n      /\\b(us only|united states only|usa only|uk only|united kingdom only|canada only)\\b/i\n        .test(location);\n\n    if (explicitlyRestricted) continue;\n\n    const salaryMin =\n      data.salary_min != null && data.salary_min !== \"\"\n        ? Number(data.salary_min)\n        : null;\n\n    const salaryMax =\n      data.salary_max != null && data.salary_max !== \"\"\n        ? Number(data.salary_max)\n        : null;\n\n    const validMin =\n      salaryMin !== null &&\n      Number.isFinite(salaryMin) &&\n      salaryMin > 0;\n\n    const validMax =\n      salaryMax !== null &&\n      Number.isFinite(salaryMax) &&\n      salaryMax > 0;\n\n    const currency = data.salary_currency || \"Currency unspecified\";\n\n    let compensation = \"Not disclosed in feed\";\n\n    if (validMin && validMax) {\n      compensation =\n        `${currency} ${salaryMin}–${salaryMax}; ` +\n        \"period and terms require verification\";\n    } else if (validMin) {\n      compensation =\n        `${currency} ${salaryMin} minimum reported; verify details`;\n    } else if (validMax) {\n      compensation =\n        `${currency} ${salaryMax} maximum reported; verify details`;\n    }\n\n    const broadLocation =\n      /\\b(worldwide|global|india|anywhere)\\b/i.test(location);\n\n    let score = 35 + Math.min(40, matchedSkills.length * 8);\n\n    if (broadLocation) score += 10;\n    if (safeDate(data.date)) score += 5;\n\n    unifiedItems.push(makeItem({\n      uid: `rok_${data.id}`,\n      module: \"EARNING_OPPORTUNITY\",\n      source_type: \"RemoteOK Tech Role\",\n      title: `${title} @ ${company}`,\n      organization: company,\n      url,\n\n      published_at: safeDate(data.date),\n      updated_at: null,\n\n      india_eligibility: broadLocation\n        ? `Feed location says \"${location}\"; confirm eligibility on the listing`\n        : `Unknown — feed location is \"${location}\"`,\n\n      compensation,\n\n      verification_status:\n        validMin || validMax\n          ? \"Source-reported salary — verify currency, period and current listing\"\n          : \"Compensation not disclosed in feed\",\n\n      matched_skills: matchedSkills,\n      relevance_score: clampScore(score),\n\n      score_explanation:\n        `Skill overlap +${Math.min(40, matchedSkills.length * 8)}; ` +\n        `broad-location indicator ${broadLocation ? \"+10\" : \"+0\"}; ` +\n        `valid listing date ${safeDate(data.date) ? \"+5\" : \"+0\"}. ` +\n        \"Triage score, not probability of hiring.\",\n\n      where_to_go: url,\n\n      how_to_capture:\n        \"Verify that the role is active, accepts applicants from India, \" +\n        \"matches your experience, and has clear application and compensation terms.\"\n    }));\n\n    continue;\n  }\n\n  // =====================================================\n  // CASE 3: Hacker News Algolia response\n  // =====================================================\n  if (Array.isArray(data.hits)) {\n    for (const hit of data.hits) {\n      if (!hit || !hit.objectID) continue;\n\n      const title =\n        hit.title || hit.story_title || \"Untitled Hacker News item\";\n\n      const discussionUrl =\n        `https://news.ycombinator.com/item?id=${hit.objectID}`;\n\n      const url = hit.url || discussionUrl;\n\n      const matchedSkills = findMatchedSkills(\n        `${title} ${hit.story_text || \"\"} ${hit.url || \"\"}`\n      );\n\n      let score = 40 + Math.min(40, matchedSkills.length * 8);\n\n      if ((hit.points || 0) > 10) score += 5;\n      if ((hit.num_comments || 0) > 5) score += 5;\n\n      unifiedItems.push(makeItem({\n        uid: `hn_${hit.objectID}`,\n        module: \"AI_LEARNING_RADAR\",\n        source_type: \"Hacker News Technical Signal\",\n        title,\n        organization: `HN author: ${hit.author || \"unknown\"}`,\n        url,\n        discussion_url: discussionUrl,\n\n        published_at: safeDate(hit.created_at),\n        updated_at: null,\n\n        india_eligibility: \"Not applicable — learning/technology signal\",\n        compensation: \"No earning claim\",\n\n        verification_status:\n          \"Community signal — inspect original source; engagement does not prove correctness\",\n\n        //matched_skills,\n        //relevance_score: clampScore(score),\n        matched_skills: matchedSkills,\n        relevance_score: clampScore(score),\n\n        score_explanation:\n          `Skill overlap +${Math.min(40, matchedSkills.length * 8)}; ` +\n          `community engagement +${((hit.points || 0) > 10 ? 5 : 0) + ((hit.num_comments || 0) > 5 ? 5 : 0)}. ` +\n          \"Triage score, not factual reliability.\",\n\n        where_to_go: url,\n\n        how_to_capture:\n          \"Read the original source, inspect the discussion for context, \" +\n          \"and decide whether the information has practical value for your learning.\"\n      }));\n    }\n  }\n}\n\n// =====================================================\n// Deduplicate within this execution and sort.\n// Persistent cross-run deduplication requires storage.\n// =====================================================\nconst deduped = new Map();\n\nfor (const item of unifiedItems) {\n  const key = item.json.uid || item.json.url;\n  const existing = deduped.get(key);\n\n  if (\n    !existing ||\n    item.json.relevance_score > existing.json.relevance_score\n  ) {\n    deduped.set(key, item);\n  }\n}\n\nreturn [...deduped.values()].sort(\n  (a, b) => b.json.relevance_score - a.json.relevance_score\n);\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          -32
+        ],
+        "id": "9a501157-018c-4735-8478-99df0f1c013c",
+        "name": "Normalize Filter & Build Action Plan"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Stage 5 & 6 (v2): Cross-Run State, URL Deduplication, Diversity Cap & HTML Digest Builder\nconst allItems = $input.all().map(i => i.json);\nconst nowIso = new Date().toISOString();\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.seenUids) {\n  staticData.seenUids = {};\n}\n\n// Normalize URLs so \"https://www.nativeship.io/\" and \"https://www.nativeship.io\" match\nfunction normalizeUrl(u) {\n  return String(u || \"\").trim().toLowerCase().replace(/\\/+$/, \"\");\n}\n\n// Reject executive/management titles or non-India regions that slipped through\nconst excludedTitlePattern = /\\b(head of|vp of|vice president|director of|principal|chief|c-level|staff manager|account manager)\\b/i;\nconst excludedLocationPattern = /\\b(brazil|latam|latin america|mexico|argentina|colombia|europe only|eu only|emea only|kansas|california|texas|new york|florida|washington|illinois|massachusetts|north america only)\\b/i;\n\nconst MIN_SCORE = 45;\nconst MAX_PER_ORG = 2;\nconst MAX_OPPORTUNITIES = 10;\nconst MAX_LEARNING = 6;\n\nconst orgCounts = {};\nconst seenUrlsThisRun = new Set();\nconst freshOpportunities = [];\nconst freshLearning = [];\nlet skippedDuplicatesCount = 0;\nlet skippedOrgCapCount = 0;\nlet skippedRoleOrRegionCount = 0;\n\nfor (const item of allItems) {\n  if (!item || !item.uid || !item.url) continue;\n\n  const normUrl = normalizeUrl(item.url);\n\n  // 1. Deduplicate by UID (cross-run) and by normalized URL (within-run & cross-run)\n  if (\n    staticData.seenUids[item.uid] ||\n    staticData.seenUids[normUrl] ||\n    seenUrlsThisRun.has(normUrl)\n  ) {\n    skippedDuplicatesCount++;\n    continue;\n  }\n\n  // 2. Filter out executive titles & region-locked locations for Earning Opportunities\n  if (item.module === \"EARNING_OPPORTUNITY\") {\n    if (\n      excludedTitlePattern.test(item.title || \"\") ||\n      excludedLocationPattern.test(item.india_eligibility || \"\")\n    ) {\n      skippedRoleOrRegionCount++;\n      continue;\n    }\n  }\n\n  // 3. Minimum relevance threshold\n  if ((item.relevance_score || 0) < MIN_SCORE) continue;\n\n  // 4. Enforce diversity cap (max 2 items per repo/company per digest)\n  const orgKey = (item.organization || \"unknown\").toLowerCase();\n  if (item.module === \"EARNING_OPPORTUNITY\") {\n    orgCounts[orgKey] = (orgCounts[orgKey] || 0) + 1;\n    if (orgCounts[orgKey] > MAX_PER_ORG) {\n      skippedOrgCapCount++;\n      continue;\n    }\n  }\n\n  if (item.module === \"EARNING_OPPORTUNITY\" && freshOpportunities.length < MAX_OPPORTUNITIES) {\n    freshOpportunities.push(item);\n    seenUrlsThisRun.add(normUrl);\n    staticData.seenUids[item.uid] = nowIso;\n    staticData.seenUids[normUrl] = nowIso;\n  } else if (item.module === \"AI_LEARNING_RADAR\" && freshLearning.length < MAX_LEARNING) {\n    freshLearning.push(item);\n    seenUrlsThisRun.add(normUrl);\n    staticData.seenUids[item.uid] = nowIso;\n    staticData.seenUids[normUrl] = nowIso;\n  }\n}\n\n// Cap staticData history to 1000 keys\nconst uidKeys = Object.keys(staticData.seenUids);\nif (uidKeys.length > 1000) {\n  for (const oldKey of uidKeys.slice(0, uidKeys.length - 1000)) {\n    delete staticData.seenUids[oldKey];\n  }\n}\n\nfunction esc(str) {\n  return String(str || \"\")\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\");\n}\n\nconst dateLabel = new Date().toLocaleDateString(\"en-IN\", {\n  weekday: \"short\", year: \"numeric\", month: \"short\", day: \"numeric\"\n});\n\nlet html = `\n<div style=\"font-family: Arial, sans-serif; max-width: 720px; margin: 0 auto; color: #1f2937; line-height: 1.5;\">\n  <h2 style=\"color: #111827; border-bottom: 2px solid #2563eb; padding-bottom: 8px;\">\n    🎯 AI Opportunity &amp; Learning Radar — ${esc(dateLabel)}\n  </h2>\n  <p style=\"font-size: 13px; color: #4b5563;\">\n    <strong>Pipeline Summary:</strong> Evaluated ${allItems.length} items | \n    Selected <strong>${freshOpportunities.length}</strong> actionable opportunities &amp; <strong>${freshLearning.length}</strong> learning signals | \n    Filtered ${skippedOrgCapCount} same-org, ${skippedDuplicatesCount} duplicate URLs/UIDs, ${skippedRoleOrRegionCount} region/exec mismatches.\n  </p>\n\n  <h3 style=\"background: #eff6ff; color: #1d4ed8; padding: 8px 12px; border-left: 4px solid #2563eb;\">\n    💰 Module A: Top Matching Earning Opportunities (${freshOpportunities.length})\n  </h3>\n`;\n\nif (freshOpportunities.length === 0) {\n  html += `<p><em>No new high-confidence earning opportunities matched your threshold in this run.</em></p>`;\n} else {\n  for (const opp of freshOpportunities) {\n    const skillsList = Array.isArray(opp.matched_skills) ? opp.matched_skills.join(\", \") : opp.matched_skills;\n    html += `\n    <div style=\"border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin-bottom: 14px; background: #ffffff;\">\n      <div style=\"font-size: 12px; color: #6b7280; margin-bottom: 4px;\">\n        <strong>[${esc(opp.source_type)}]</strong> • Org: <strong>${esc(opp.organization)}</strong> • Triage Score: <strong>${esc(opp.relevance_score)}/100</strong>\n      </div>\n      <div style=\"font-size: 16px; font-weight: bold; margin-bottom: 6px;\">\n        <a href=\"${esc(opp.url)}\" style=\"color: #2563eb; text-decoration: none;\">${esc(opp.title)}</a>\n      </div>\n      <div style=\"font-size: 13px; margin-bottom: 4px;\">\n        <strong>💵 Compensation:</strong> ${esc(opp.compensation)} <em>(${esc(opp.verification_status)})</em>\n      </div>\n      <div style=\"font-size: 13px; margin-bottom: 4px;\">\n        <strong>🇮🇳 India Eligibility:</strong> ${esc(opp.india_eligibility)}\n      </div>\n      <div style=\"font-size: 13px; margin-bottom: 6px;\">\n        <strong>🛠️ Matched Skills:</strong> ${esc(skillsList || \"General Tech\")}\n      </div>\n      <div style=\"background: #f9fafb; border-left: 3px solid #10b981; padding: 8px; font-size: 13px;\">\n        <strong>🚀 How to Capture This:</strong> ${esc(opp.how_to_capture)}<br/>\n        <strong>🔗 Direct Link:</strong> <a href=\"${esc(opp.where_to_go)}\">${esc(opp.where_to_go)}</a>\n      </div>\n    </div>`;\n  }\n}\n\nhtml += `\n  <h3 style=\"background: #f0fdf4; color: #15803d; padding: 8px 12px; border-left: 4px solid #16a34a; margin-top: 24px;\">\n    🧠 Module B: AI &amp; Automation Learning Radar (${freshLearning.length})\n  </h3>\n`;\n\nif (freshLearning.length === 0) {\n  html += `<p><em>No new learning signals matched your threshold in this run.</em></p>`;\n} else {\n  for (const sig of freshLearning) {\n    const skillsList = Array.isArray(sig.matched_skills) ? sig.matched_skills.join(\", \") : sig.matched_skills;\n    html += `\n    <div style=\"border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; margin-bottom: 10px;\">\n      <div style=\"font-size: 15px; font-weight: bold;\">\n        <a href=\"${esc(sig.url)}\" style=\"color: #15803d; text-decoration: none;\">${esc(sig.title)}</a>\n      </div>\n      <div style=\"font-size: 12px; color: #4b5563; margin-top: 4px;\">\n        <strong>Matched Stack:</strong> ${esc(skillsList || \"n8n / AI\")} | <strong>Score:</strong> ${esc(sig.relevance_score)}/100<br/>\n        <strong>Action:</strong> ${esc(sig.how_to_capture)}\n      </div>\n    </div>`;\n  }\n}\n\nhtml += `\n  <hr style=\"border: none; border-top: 1px solid #e5e7eb; margin-top: 20px;\"/>\n  <p style=\"font-size: 11px; color: #9ca3af;\">\n    Generated locally by n8n AI Opportunity &amp; Learning Radar (₹0 Cost Architecture). All compensation and eligibility claims are source-reported and must be verified on the destination page before investing work.\n  </p>\n</div>\n`;\n\nreturn [{\n  json: {\n    subject: `🎯 Opportunity Radar (${dateLabel}): ${freshOpportunities.length} Matched Gigs & Bounties`,\n    should_send_email: (freshOpportunities.length + freshLearning.length) > 0,\n    total_evaluated: allItems.length,\n    opportunities_selected: freshOpportunities.length,\n    learning_selected: freshLearning.length,\n    skipped_same_org: skippedOrgCapCount,\n    skipped_duplicates: skippedDuplicatesCount,\n    skipped_role_or_region: skippedRoleOrRegionCount,\n    opportunities: freshOpportunities,\n    learning_signals: freshLearning,\n    html_report: html,\n    generated_at: nowIso\n  }\n}];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          656,
+          -16
+        ],
+        "id": "af93a62a-d650-4f26-b913-142dbb96d4c6",
+        "name": "Build Daily Digest & Deduplicate"
+      },
+      {
+        "parameters": {
+          "fromEmail": "your-email@example.com",
+          "toEmail": "your-email@example.com",
+          "subject": "={{ $json.subject }}",
+          "html": "={{ $json.html_report }}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2.1,
+        "position": [
+          880,
+          -16
+        ],
+        "id": "247aaa08-a3b8-4e54-a5e2-cc37f3b26811",
+        "name": "Send an Email",
+        "webhookId": "b7a1cb95-3e10-447d-891e-808b9b414221",
+        "credentials": {
+          "smtp": {
+            "id": "otOpKmaN5qUF68QD",
+            "name": "SMTP account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "triggerAtHour": 9,
+                "triggerAtMinute": 45
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -320,
+          80
+        ],
+        "id": "a08766e4-a9c1-478c-af32-3b0435b11876",
+        "name": "Schedule Trigger"
+      }
+    ],
+    "connections": {
+      "When clicking ‘Execute workflow’": {
+        "main": [
+          [
+            {
+              "node": "Fetch RemoteOK Jobs",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch GitHub Bounties",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch HN AI & Automation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch GitHub Bounties": {
+        "main": [
+          [
+            {
+              "node": "Merge",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Fetch RemoteOK Jobs": {
+        "main": [
+          [
+            {
+              "node": "Merge",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch HN AI & Automation": {
+        "main": [
+          [
+            {
+              "node": "Merge",
+              "type": "main",
+              "index": 2
+            }
+          ]
+        ]
+      },
+      "Merge": {
+        "main": [
+          [
+            {
+              "node": "Normalize Filter & Build Action Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Filter & Build Action Plan": {
+        "main": [
+          [
+            {
+              "node": "Build Daily Digest & Deduplicate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Daily Digest & Deduplicate": {
+        "main": [
+          [
+            {
+              "node": "Send an Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "Fetch GitHub Bounties",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch RemoteOK Jobs",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Fetch HN AI & Automation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate",
+      "availableInMCP": false
+    },
+    "staticData": {
+      "node:Schedule Trigger": {
+        "recurrenceRules": [
+          null
+        ],
+        "recurrenceRuleSignatures": [
+          null
+        ]
+      }
+    },
+    "meta": {
+      "templateCredsSetupCompleted": true
+    },
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "9bae1678-a5f1-4bf5-8942-b99c6e5644b4",
+    "activeVersionId": "9bae1678-a5f1-4bf5-8942-b99c6e5644b4",
+    "versionCounter": 126,
+    "triggerCount": 1,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-10-22T20:57:49.060Z",
+        "createdAt": "2026-10-22T20:57:49.060Z",
+        "role": "workflow:owner",
+        "workflowId": "qGruJiZ9J2DndX5h",
+        "projectId": "kvDQjrlsxoGBks25",
+        "project": {
+          "updatedAt": "2026-10-04T17:24:05.352Z",
+          "createdAt": "2026-10-04T17:18:00.115Z",
+          "id": "kvDQjrlsxoGBks25",
+          "name": "Your Name <your-email@example.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "a98eddc1-f1ee-458d-9b78-f47473b9ab77"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": "Version 9bae1678",
+      "description": ""
+    }
+  }
+]
